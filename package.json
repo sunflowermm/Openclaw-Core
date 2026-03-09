@@ -1,0 +1,27 @@
+{
+  "name": "xrk-core-openclaw",
+  "version": "1.0.0",
+  "description": "XRK-AGT Openclaw-Core - Openclaw 能力核心",
+  "type": "module",
+  "main": "index.js",
+  "author": "XRK",
+  "license": "MIT",
+  "keywords": [
+    "xrk-agt",
+    "openclaw",
+    "core",
+    "plugin",
+    "stream",
+    "tasker"
+  ],
+  "engines": {
+    "node": ">=24.13.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "ulid": "^3.0.2",
+    "ws": "^8.17.0"
+  }
+}

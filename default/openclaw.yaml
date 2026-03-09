@@ -1,0 +1,3 @@
+# OpenClaw-Core 总开关
+# 关闭后：XrkBridge Tasker 与 XrkBridgeForward 插件不加载，不响应 OpenClaw 桥接
+enabled: true
