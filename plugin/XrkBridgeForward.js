@@ -23,7 +23,9 @@ export class XrkBridgeForward extends plugin {
     super({
       name: 'XrkBridge Forward',
       dsc: '主人私聊 → XrkBridge → OpenClaw',
-      event: 'onebot.message.private',
+      // 统一走框架级 message 事件，依靠 e.isPrivate/e.isMaster 过滤，
+      // 支持所有协议的主人私聊，而不仅限于 OneBot。
+      event: 'message.private',
       priority: 1500,
     });
   }

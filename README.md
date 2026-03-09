@@ -36,13 +36,13 @@ Openclaw-Core/
 ## 桥接链路
 
 1. **XRK-AGT 侧**  
-   - Napcat/OneBotv11 连接 XRK-AGT → 主人私聊触发 `onebot.message.private`。  
-   - `XrkBridgeForward` 插件（`enabled` 为 true 时）将消息交给 `XrkBridge` Tasker。  
-   - `XrkBridge` 在路径 `/XrkBridge` 提供 WebSocket 服务，将消息发给已连接的 OpenClaw 插件并等待回复，再通过 `e.reply` 回 QQ。
+   - Napcat/OneBotv11 等协议连接 XRK-AGT → 主人私聊触发框架级 `message` 事件。  
+   - `XrkBridgeForward` 插件（`enabled` 为 true 时）在 `accept()` 中通过 `e.isPrivate && e.isMaster` 过滤，仅转发“主人私聊”到 `XrkBridge` Tasker。  
+   - `XrkBridge` 在路径 `/XrkBridge` 提供 WebSocket 服务，将标准化后的入站消息发给已连接的 OpenClaw 插件并等待回复，再通过 `e.reply` 回 QQ / 其他前端。
 
 2. **OpenClaw 侧**  
-   - 安装并启用本 Core 下的 **OpenClaw-xrk-bridger** 通道插件，配置 `wsUrl: ws://<XRK-AGT 地址>:端口/XrkBridge`。  
-   - 插件以 WS 客户端连接 XRK-AGT，收到消息后走 OpenClaw 的 channel/runtime 流程，回复经同一 WS 发回 XRK-AGT。
+   - 通过 `openclaw plugins install openclaw-xrk-bridger` 安装 **OpenClaw-xrk-bridger** 通道插件，在 Gateway 控制台为 `XRK-AGT Bridge` 填写 `WS Url`（例如 `ws://<XRK-AGT 地址>:端口/XrkBridge`）与可选 `Access Token`。  
+   - 插件以 WS 客户端连接 XRK-AGT，收到消息后走 OpenClaw 的 channel/runtime 流程；回复支持 `text + files[{url,name}]`，经同一 WS 发回 XRK-AGT，由 XRK 负责最终发到 QQ / 其他端。
 
 ## 底层依赖与可用性
 
