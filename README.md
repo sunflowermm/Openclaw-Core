@@ -15,13 +15,11 @@
 ## 📦 项目定位
 
 - **所在位置**：
-  - 在 XRK-AGT 仓库内作为 Core 模块：`core/Openclaw-Core/`
+  - 在 XRK-AGT 仓库内作为 Core 模块：克隆放入 `core/Openclaw-Core/` 即可
 - **职责**：
   - 在 XRK-AGT 侧提供 **WebSocket 服务端**（Tasker：`XrkBridge`）
-  - 借助插件 `XrkBridgeForward` 只转发 **“主人私聊”等受控事件** 到 OpenClaw
+  - 借助插件 `XrkBridgeForward` 只转发 **“主人私聊”等受控事件** 到 OpenClaw 的 bridger 插件
   - 通过 `commonconfig/openclaw.js` + `data/openclaw/openclaw.yaml` 提供 **总开关与配置托管**
-
-> ⚠️ 本 Core **不修改** XRK-AGT 的 `src/` 目录，仅依赖框架既有的 Loader / 基类 / 全局对象。
 
 ---
 
@@ -39,13 +37,6 @@ Openclaw-Core/
 │   └── XrkBridge.js            # 自定义 Tasker：WS 服务端 /XrkBridge
 ├── plugin/
 │   └── XrkBridgeForward.js     # 主人私聊 → 转发到 XrkBridge → OpenClaw
-└── OpenClaw-xrk-bridger/       # OpenClaw 侧通道插件（见下方 README 或独立仓库）
-    ├── README.md
-    ├── package.json
-    ├── openclaw.plugin.json
-    ├── tsconfig.json
-    ├── src/
-    └── dist/                   # 构建产物，需部署到 OpenClaw extensions
 ```
 
 ---
@@ -57,7 +48,7 @@ Openclaw-Core/
 - **默认模板**：`core/Openclaw-Core/default/openclaw.yaml`
 - **实际生效**：`data/openclaw/openclaw.yaml`
   - 由 XRK-AGT 的 commonconfig 系统在首次读取时自动从 `default/` 复制
-  - 统一由 `global.ConfigManager` 管理
+  - 统一由 `global.ConfigManager` 管理，可以在 **web 控制台** 编辑
 
 ### 2. 关键字段
 
