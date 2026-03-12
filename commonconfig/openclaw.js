@@ -1,8 +1,8 @@
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
-import paths from '#utils/paths.js';
-import ConfigBase from '#infrastructure/commonconfig/commonconfig.js';
+import paths from '../../../src/utils/paths.js';
+import ConfigBase from '../../../src/infrastructure/commonconfig/commonconfig.js';
 
 const DEFAULT_SOURCE = path.join(paths.root, 'core', 'Openclaw-Core', 'default', 'openclaw.yaml');
 
