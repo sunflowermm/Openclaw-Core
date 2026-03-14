@@ -129,8 +129,23 @@ const XrkBridgeTasker = class {
 
   async processImageUrl(url) {
     if (!url) return null;
+    // base64 和网络 URL 直接返回
     if (url.startsWith('base64://')) return url;
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    // 处理本地文件路径（支持 file:// 前缀和直接路径）
+    let filePath = url;
+    if (url.startsWith('file://')) {
+      filePath = url.replace(/^file:\/\/+/i, '').replace(/^\/([A-Za-z]:)/, '$1');
+    }
+    // 尝试读取本地文件并转为 base64
+    try {
+      if (fs.existsSync(filePath)) {
+        const buffer = fs.readFileSync(filePath);
+        return `base64://${buffer.toString('base64')}`;
+      }
+    } catch (err) {
+      this.makeLog('warn', ['读取本地文件失败', filePath, err?.message], 'XRK-OC');
+    }
     return null;
   }
 
