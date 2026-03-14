@@ -224,7 +224,7 @@ const XrkBridgeTasker = class {
       if (!processedUrl) continue;
       const info = await this.detectFileType(processedUrl);
       const name = this.resolveFileName({ name: item.name }, info);
-      this.makeLog('debug', ['发往 QQ 文件', '收到 name:', item.name, '→ 最终 name:', name], 'XRK-OC');
+      this.makeLog('info', ['发往 QQ 文件', '收到 name:', item.name ?? '(空，来自 mediaUrls)', '→ 最终 name:', name], 'XRK-OC');
       const data = { file: processedUrl, name };
       if (info.isImage) await sendMsgFn([{ type: 'image', data: { file: processedUrl } }]);
       else if (info.isVideo) await sendMsgFn([{ type: 'video', data }]);
@@ -234,9 +234,14 @@ const XrkBridgeTasker = class {
   }
 
   async handleDirectReply(reply) {
-    this.makeLog('info', ['handleDirectReply 开始', `mediaUrls: ${reply.mediaUrls?.length || 0}, files: ${reply.files?.length || 0}`], 'XRK-OC');
-    if (Array.isArray(reply.files) && reply.files.length > 0) {
-      reply.files.forEach((f, i) => this.makeLog('debug', [`reply.files[${i}]`, 'url:', f.url?.slice?.(0, 60), 'name:', f.name], 'XRK-OC'));
+    const nMedia = reply.mediaUrls?.length || 0;
+    const nFiles = reply.files?.length || 0;
+    this.makeLog('info', ['handleDirectReply 开始', `mediaUrls: ${nMedia}, files: ${nFiles}`], 'XRK-OC');
+    if (nFiles > 0) {
+      reply.files.forEach((f, i) => this.makeLog('info', [`reply.files[${i}]`, 'name:', f.name ?? '(未传)', 'url:', f.url?.slice?.(0, 50) + '…'], 'XRK-OC'));
+    }
+    if (nMedia > 0 && nFiles === 0) {
+      this.makeLog('warn', ['回复仅有 mediaUrls 无 files，文件将无真实文件名，QQ 显示为 file.xxx；上游请用 files 并传 name'], 'XRK-OC');
     }
 
     try {
