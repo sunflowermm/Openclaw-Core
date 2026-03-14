@@ -100,16 +100,23 @@ const XrkBridgeTasker = class {
     return ticket.promise;
   }
 
+  /** 从事件中抽取媒体与文件（图片 / 视频 / 音频 / 文件统一走 mediaUrls + files，供 OpenClaw 使用） */
   extractMedia(e) {
     const mediaUrls = [];
     const files = [];
 
     if (Array.isArray(e.msg)) {
       for (const segment of e.msg) {
-        if (segment.type === 'image' && segment.data?.url) {
-          mediaUrls.push(segment.data.url);
-        } else if (segment.type === 'file' && segment.data?.url) {
-          files.push({ url: segment.data.url, name: segment.data.name || segment.data.file });
+        const data = segment.data || segment;
+        const url = data.url || data.file;
+        const name = data.name || data.file;
+        if (!url) continue;
+        if (segment.type === 'image') {
+          mediaUrls.push(url);
+        } else if (segment.type === 'video' || segment.type === 'record') {
+          files.push({ url, name: name || (segment.type === 'video' ? 'video' : 'audio') });
+        } else if (segment.type === 'file') {
+          files.push({ url, name: name || 'file' });
         }
       }
     }
@@ -119,55 +126,110 @@ const XrkBridgeTasker = class {
     let match;
     while ((match = imageRegex.exec(rawMessage)) !== null) {
       const url = match[1].replace(/&amp;/g, '&');
-      if (url.startsWith('http') || url.startsWith('base64://')) {
-        mediaUrls.push(url);
-      }
+      if (url.startsWith('http') || url.startsWith('base64://')) mediaUrls.push(url);
     }
 
     return { mediaUrls, files };
   }
 
-  async processImageUrl(url) {
+  /** 将 URL 或本机路径转为可发送形式（base64/http 直接透传，本地文件读成 base64） */
+  async processUrl(url) {
     if (!url) return null;
-    // base64 和网络 URL 直接返回
-    if (url.startsWith('base64://')) return url;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    // 处理本地文件路径（支持 file:// 前缀和直接路径）
-    let filePath = url;
-    if (url.startsWith('file://')) {
-      filePath = url.replace(/^file:\/\/+/i, '').replace(/^\/([A-Za-z]:)/, '$1');
-    }
-    // 尝试读取本地文件并转为 base64
+    if (url.startsWith('base64://') || url.startsWith('http://') || url.startsWith('https://')) return url;
+    let filePath = url.startsWith('file://') ? url.replace(/^file:\/\/+/i, '').replace(/^\/([A-Za-z]:)/, '$1') : url;
     try {
-      if (fs.existsSync(filePath)) {
-        const buffer = fs.readFileSync(filePath);
-        return `base64://${buffer.toString('base64')}`;
-      }
+      if (fs.existsSync(filePath)) return `base64://${fs.readFileSync(filePath).toString('base64')}`;
     } catch (err) {
       this.makeLog('warn', ['读取本地文件失败', filePath, err?.message], 'XRK-OC');
     }
     return null;
   }
 
-  async detectFileType(url) {
-    if (!url) return { isImage: false, ext: 'bin' };
+  /** MIME 或扩展名 → 常见后缀映射（办公 / 视频 / 音频等均能正确出后缀） */
+  static EXT_MAP = {
+    cfb: 'ppt',
+    mscfb: 'pptx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  };
 
+  /** 根据检测结果得到发往 QQ 的扩展名（统一入口，避免 file.cfb 等） */
+  normalizeFileExt(ext, mime) {
+    if (!ext && !mime) return 'bin';
+    const m = this.constructor.EXT_MAP;
+    if (mime && m[mime]) return m[mime];
+    const lower = String(ext || '').toLowerCase();
+    return (m[lower] ?? lower) || 'bin';
+  }
+
+  /** 检测结果：isImage / isVideo / isAudio 用于选 QQ 段类型，ext/mime 用于文件名与映射 */
+  async detectFileType(url) {
+    if (!url) return { isImage: false, isVideo: false, isAudio: false, ext: 'bin', mime: null };
     if (url.startsWith('base64://')) {
       try {
-        const base64Data = url.replace(/^base64:\/\//, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-        const fileType = await fileTypeFromBuffer(buffer);
-
-        if (fileType) {
-          const isImage = fileType.mime.startsWith('image/');
-          return { isImage, mime: fileType.mime, ext: fileType.ext };
+        const buffer = Buffer.from(url.replace(/^base64:\/\//, ''), 'base64');
+        const ft = await fileTypeFromBuffer(buffer);
+        if (ft) {
+          const m = ft.mime;
+          return {
+            isImage: m.startsWith('image/'),
+            isVideo: m.startsWith('video/'),
+            isAudio: m.startsWith('audio/'),
+            mime: m,
+            ext: ft.ext,
+          };
         }
       } catch (err) {
         this.makeLog('warn', ['检测文件类型失败', err?.message], 'XRK-OC');
       }
     }
+    try {
+      let pathname = url;
+      if (url.startsWith('file://')) pathname = url.replace(/^file:\/\/+/i, '').replace(/^\/([A-Za-z]:)/, '$1');
+      else if (url.startsWith('http://') || url.startsWith('https://')) pathname = new URL(url).pathname;
+      const ext = path.extname(pathname.split('?')[0]).slice(1).toLowerCase();
+      if (ext) {
+        const img = /^(png|jpe?g|gif|webp|bmp|heic|avif|ico)$/.test(ext);
+        const vid = /^(mp4|webm|mov|avi|mkv|flv|m4v|3gp|wmv)$/.test(ext);
+        const aud = /^(mp3|wav|ogg|m4a|aac|flac|opus|amr)$/.test(ext);
+        return { isImage: img, isVideo: vid, isAudio: aud, ext, mime: null };
+      }
+    } catch (_) {}
+    return { isImage: false, isVideo: false, isAudio: false, ext: 'bin', mime: null };
+  }
 
-    return { isImage: false, ext: 'bin' };
+  /** 发往 QQ 的最终文件名：有有效原名用原名，否则用规范扩展名 */
+  resolveFileName(file, fileInfo) {
+    const raw = file?.name?.trim();
+    const generic = /^file\.(bin|cfb|dat|mscfb)$/i;
+    if (raw && raw !== 'file' && !generic.test(raw)) return raw;
+    const ext = this.normalizeFileExt(fileInfo?.ext, fileInfo?.mime);
+    return `file.${ext}`;
+  }
+
+  /** 统一发送回复内容：文本 + 图片/视频/音频/文件（按检测结果选 QQ 段类型，保证所有类型可发） */
+  async sendReplyContent(reply, sendMsgFn) {
+    if (reply.text) await sendMsgFn(String(reply.text));
+
+    const items = [
+      ...(Array.isArray(reply.mediaUrls) ? reply.mediaUrls.map(u => ({ url: u, name: null })) : []),
+      ...(Array.isArray(reply.files) ? reply.files.map(f => ({ url: f.url, name: f.name })) : []),
+    ];
+    for (const item of items) {
+      const processedUrl = await this.processUrl(item.url);
+      if (!processedUrl) continue;
+      const info = await this.detectFileType(processedUrl);
+      const name = this.resolveFileName({ name: item.name }, info);
+      const data = { file: processedUrl, name };
+      if (info.isImage) await sendMsgFn([{ type: 'image', data: { file: processedUrl } }]);
+      else if (info.isVideo) await sendMsgFn([{ type: 'video', data }]);
+      else if (info.isAudio) await sendMsgFn([{ type: 'record', data }]);
+      else await sendMsgFn([{ type: 'file', data }]);
+    }
   }
 
   async handleDirectReply(reply) {
@@ -196,41 +258,7 @@ const XrkBridgeTasker = class {
         return;
       }
 
-      if (reply.text) {
-        this.makeLog('info', ['发送文本消息'], 'XRK-OC');
-        await target.sendMsg(String(reply.text));
-      }
-
-      if (Array.isArray(reply.mediaUrls) && reply.mediaUrls.length > 0) {
-        this.makeLog('info', [`准备发送 ${reply.mediaUrls.length} 个媒体文件`], 'XRK-OC');
-        for (const url of reply.mediaUrls) {
-          const processedUrl = await this.processImageUrl(url);
-          if (!processedUrl) continue;
-
-          const fileInfo = await this.detectFileType(processedUrl);
-          this.makeLog('info', [`文件类型检测: isImage=${fileInfo.isImage}, mime=${fileInfo.mime || 'unknown'}`], 'XRK-OC');
-
-          if (fileInfo.isImage) {
-            await target.sendMsg([{ type: 'image', data: { file: processedUrl } }]);
-            this.makeLog('info', ['图片发送成功'], 'XRK-OC');
-          } else {
-            const fileName = `file.${fileInfo.ext || 'bin'}`;
-            await target.sendMsg([{ type: 'file', data: { file: processedUrl, name: fileName } }]);
-            this.makeLog('info', ['文件发送成功', fileName], 'XRK-OC');
-          }
-        }
-      }
-
-      if (Array.isArray(reply.files) && reply.files.length > 0) {
-        this.makeLog('info', [`准备发送 ${reply.files.length} 个文件`], 'XRK-OC');
-        for (const file of reply.files) {
-          const processedUrl = await this.processImageUrl(file.url);
-          if (processedUrl) {
-            await target.sendMsg([{ type: 'file', data: { file: processedUrl, name: file.name } }]);
-            this.makeLog('info', ['文件发送成功', file.name], 'XRK-OC');
-          }
-        }
-      }
+      await this.sendReplyContent(reply, msg => target.sendMsg(msg));
     } catch (err) {
       this.makeLog('error', ['处理直接回复失败', err?.message || err], 'XRK-OC');
     }
@@ -251,34 +279,7 @@ const XrkBridgeTasker = class {
 
     try {
       if (typeof e.reply !== 'function') return true;
-
-      if (reply.text) {
-        await e.reply(String(reply.text));
-      }
-
-      if (Array.isArray(reply.mediaUrls) && reply.mediaUrls.length > 0) {
-        for (const url of reply.mediaUrls) {
-          const processedUrl = await this.processImageUrl(url);
-          if (!processedUrl) continue;
-
-          const fileInfo = await this.detectFileType(processedUrl);
-          if (fileInfo.isImage) {
-            await e.reply([{ type: 'image', data: { file: processedUrl } }]);
-          } else {
-            const fileName = `file.${fileInfo.ext || 'bin'}`;
-            await e.reply([{ type: 'file', data: { file: processedUrl, name: fileName } }]);
-          }
-        }
-      }
-
-      if (Array.isArray(reply.files) && reply.files.length > 0) {
-        for (const file of reply.files) {
-          const processedUrl = await this.processImageUrl(file.url);
-          if (processedUrl) {
-            await e.reply([{ type: 'file', data: { file: processedUrl, name: file.name } }]);
-          }
-        }
-      }
+      await this.sendReplyContent(reply, msg => e.reply(msg));
     } catch (err) {
       this.makeLog('error', ['发送 OpenClaw 回复失败', err?.message || err], e.self_id);
     }
