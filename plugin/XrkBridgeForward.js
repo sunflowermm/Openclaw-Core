@@ -6,7 +6,7 @@
  */
 
 async function isOpenclawEnabled() {
-  const cm = global.ConfigManager;
+  const cm = global.CommonConfigRegistry;
   if (!cm?.configs?.get) return true;
   const openclaw = cm.configs.get('openclaw');
   if (!openclaw || typeof openclaw.read !== 'function') return true;
@@ -18,7 +18,7 @@ async function isOpenclawEnabled() {
   }
 }
 
-export class XrkBridgeForward extends plugin {
+export class XrkBridgeForward extends PluginBase {
   constructor() {
     super({
       name: 'XrkBridge Forward',
@@ -33,7 +33,7 @@ export class XrkBridgeForward extends plugin {
   async accept(e) {
     if (!(await isOpenclawEnabled())) return false;
     if (!e || e.isGroup || !e.isPrivate || !e.isMaster) return false;
-    const bridge = Bot.xrkBridge;
+    const bridge = AgentRuntime.xrkBridge;
     if (!bridge || typeof bridge.forwardEvent !== 'function') return false;
     return await bridge.forwardEvent(e);
   }

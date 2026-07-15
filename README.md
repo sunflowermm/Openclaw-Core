@@ -48,7 +48,7 @@ Openclaw-Core/
 - **默认模板**：`core/Openclaw-Core/default/openclaw.yaml`
 - **实际生效**：`data/openclaw/openclaw.yaml`
   - 由 XRK-AGT 的 commonconfig 系统在首次读取时自动从 `default/` 复制
-  - 统一由 `global.ConfigManager` 管理，可以在 **web 控制台** 编辑
+  - 统一由 `global.CommonConfigRegistry` 管理，可以在 **web 控制台** 编辑
 
 ### 2. 关键字段
 
@@ -117,9 +117,9 @@ flowchart LR
 | 能力 | 说明 |
 |------|------|
 | **commonconfig 加载** | `src/infrastructure/commonconfig/loader.js` 扫描 `core/*/commonconfig/*.js`，加载 `openclaw.js` 并注册 key `openclaw`。 |
-| **Tasker 加载** | `src/infrastructure/tasker/loader.js` 扫描 `core/*/tasker/*.js`，调用模块导出的 `register(bot)`；`XrkBridge.js` 内部根据 `openclaw.enabled` 决定是否注册到 `Bot.tasker`。 |
+| **Tasker 加载** | `src/infrastructure/tasker/loader.js` 扫描 `core/*/tasker/*.js`，调用模块导出的 `register(bot)`；`XrkBridge.js` 内部根据 `openclaw.enabled` 决定是否注册到 `AgentRuntime.tasker`。 |
 | **Plugin 加载** | `src/infrastructure/plugins/loader.js` 扫描 `core/*/plugin/*.js`；`XrkBridgeForward` 在 `accept()` 阶段读取 `openclaw.enabled`，为 `false` 时直接返回。 |
-| **全局对象** | 使用 `Bot`、`global.ConfigManager`、插件基类 `plugin`，遵循 XRK-AGT 约定。 |
+| **全局对象** | 使用 `AgentRuntime`、`global.CommonConfigRegistry`、插件基类 `plugin`，遵循 XRK-AGT 约定。 |
 
 ---
 

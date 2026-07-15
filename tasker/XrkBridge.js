@@ -17,8 +17,8 @@ const XrkBridgeTasker = class {
   timeout = 120000;
 
   makeLog(level, msg, selfId) {
-    if (Array.isArray(msg)) Bot.makeLog(level, msg, selfId);
-    else Bot.makeLog(level, String(msg), selfId);
+    if (Array.isArray(msg)) AgentRuntime.makeLog(level, msg, selfId);
+    else AgentRuntime.makeLog(level, String(msg), selfId);
   }
 
   attach(ws) {
@@ -67,7 +67,7 @@ const XrkBridgeTasker = class {
 
   sendToOpenclaw(e, text, mediaUrls = [], files = []) {
     if (!this.ws || this.ws.readyState !== 1) {
-      return Promise.reject(Bot.makeError('OpenClaw Bridge 未连接'));
+      return Promise.reject(AgentRuntime.makeError('OpenClaw Bridge 未连接'));
     }
     const id = ulid();
     const isGroup = !!e.group_id;
@@ -87,7 +87,7 @@ const XrkBridgeTasker = class {
     const timer = setTimeout(() => {
       if (!this.pending.has(id)) return;
       this.pending.delete(id);
-      ticket.reject(Bot.makeError('OpenClaw Bridge 响应超时'));
+      ticket.reject(AgentRuntime.makeError('OpenClaw Bridge 响应超时'));
     }, this.timeout);
     ticket.promise.finally(() => clearTimeout(timer)).catch(() => {});
     try {
@@ -260,8 +260,8 @@ const XrkBridgeTasker = class {
       const selfId = reply.selfId ?? reply.to?.selfId ?? null;
       this.makeLog('info', [`目标: ${isGroup ? 'group' : 'user'} ${targetId}${selfId ? ` (self_id=${selfId})` : ''}`], 'XRK-OC');
 
-      const sendMethod = isGroup ? Bot.pickGroup : Bot.pickFriend;
-      const target = sendMethod.call(Bot, targetId, selfId);
+      const sendMethod = isGroup ? AgentRuntime.pickGroup : AgentRuntime.pickFriend;
+      const target = sendMethod.call(AgentRuntime, targetId, selfId);
       if (!target || typeof target.sendMsg !== 'function') {
         this.makeLog('error', ['无法获取发送目标', selfId ? `(self_id=${selfId})` : '未指定 selfId，可能发错端'], 'XRK-OC');
         return;
@@ -297,10 +297,10 @@ const XrkBridgeTasker = class {
   }
 
   load() {
-    if (!Array.isArray(Bot.wsf[this.path])) Bot.wsf[this.path] = [];
-    Bot.wsf[this.path].push(ws => this.attach(ws));
+    if (!Array.isArray(AgentRuntime.wsf[this.path])) AgentRuntime.wsf[this.path] = [];
+    AgentRuntime.wsf[this.path].push(ws => this.attach(ws));
     this.makeLog('info', 'XrkBridge Tasker 已注册 WS 路径 /XrkBridge', 'XRK-OC');
-    Bot.xrkBridge = this;
+    AgentRuntime.xrkBridge = this;
   }
 };
 
@@ -309,7 +309,7 @@ const XrkBridgeTasker = class {
  */
 export async function register(bot) {
   let enabled = true;
-  const cm = global.ConfigManager;
+  const cm = global.CommonConfigRegistry;
   if (cm?.configs?.get) {
     const openclaw = cm.configs.get('openclaw');
     if (openclaw && typeof openclaw.read === 'function') {
@@ -320,5 +320,5 @@ export async function register(bot) {
     }
   }
   if (!enabled) return;
-  Bot.tasker.push(new XrkBridgeTasker());
+  AgentRuntime.tasker.push(new XrkBridgeTasker());
 }
